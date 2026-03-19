@@ -6,14 +6,15 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import config from "../common/config"
 import crypto from "node:crypto"
+import { AccessTokenPayload, RefreshTokenPayload } from './types/jwt-tokens.types';
 
 @Injectable()
 export class AuthService {
 
   private readonly ACCESS_TOKEN_SECRET:string|undefined
   private readonly REFRESH_TOKEN_SECRET:string|undefined
-  private readonly ACCESS_TOKEN_EXPIRES_IN:number
-  private readonly REFRESH_TOKEN_EXPIRES_IN:number
+  private readonly ACCESS_TOKEN_EXPIRES_IN:number = config.jwt.accessToken.expiresIn
+  private readonly REFRESH_TOKEN_EXPIRES_IN:number = config.jwt.refreshToken.expiresIn
 
   constructor(
     private readonly usersService:UsersService,
@@ -23,12 +24,18 @@ export class AuthService {
   ){
     this.ACCESS_TOKEN_SECRET = this.configService.get("ACCESS_TOKEN_SECRET")
     this.REFRESH_TOKEN_SECRET = this.configService.get("REFRESH_TOKEN_SECRET")
-    this.ACCESS_TOKEN_EXPIRES_IN = config.jwt.accessToken.expiresIn
-    this.REFRESH_TOKEN_EXPIRES_IN = config.jwt.refreshToken.expiresIn
   }
 
   async register(){
     return await this.usersService.create()
+  }
+
+  async validate(loginDto:LoginDto){
+    
+    const {search_hash,verification_hash,...user} = await this.usersService.findBySecret(loginDto.secretPhrase)
+
+    return user
+
   }
 
   async login(loginDto:LoginDto){
@@ -37,7 +44,6 @@ export class AuthService {
 
     const {id:userId} = await this.usersService.findBySecret(loginDto.secretPhrase)
     const familyId = crypto.randomUUID()
-
 
     const accessToken = await this.genAccessToken({sub:userId}) 
     const refreshToken = await this.genRefreshToken({sub:userId,familyId})
@@ -56,10 +62,10 @@ export class AuthService {
 
   private async genAccessToken({
     sub
-  }:{
-    sub:string
-  }):Promise<string>{
-    return await this.jwtService.signAsync({
+  }:
+  AccessTokenPayload
+  ):Promise<string>{
+    return await this.jwtService.signAsync<AccessTokenPayload>({
       sub
     },
     {
@@ -71,11 +77,10 @@ export class AuthService {
   private async genRefreshToken({
     familyId,
     sub
-  }:{
-    sub:string,
-    familyId:string
-  }):Promise<string>{
-    return await this.jwtService.signAsync({
+  }:
+    Omit<RefreshTokenPayload,"version">
+  ):Promise<string>{
+    return await this.jwtService.signAsync<RefreshTokenPayload>({
       sub,
       familyId,
       version:1
@@ -114,4 +119,6 @@ export class AuthService {
 
     if(!refreshTokenEntity)  throw new InternalServerErrorException()
   }
+
+//TODO: Implement token managing methods that will be used by auth.guard
 }

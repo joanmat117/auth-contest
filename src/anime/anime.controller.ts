@@ -1,6 +1,6 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { AnimeService } from './anime.service';
-import { AuthGuard } from 'src/common/guards/auth.guard';
+import { AuthGuard } from 'src/auth/guards/auth.guard';
 
 @UseGuards(AuthGuard)
 @Controller('anime')
