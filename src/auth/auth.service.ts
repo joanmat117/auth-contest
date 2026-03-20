@@ -1,124 +1,89 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { LoginDto } from './dto/login.dto';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
+import { JwtManagerService } from './jwt-manager.service';
+import config from "src/common/config"
+import * as crypto from "node:crypto";
 import { PrismaService } from 'src/prisma/prisma.service';
-import config from "../common/config"
-import crypto from "node:crypto"
-import { AccessTokenPayload, RefreshTokenPayload } from './types/jwt-tokens.types';
 
 @Injectable()
 export class AuthService {
-
-  private readonly ACCESS_TOKEN_SECRET:string|undefined
-  private readonly REFRESH_TOKEN_SECRET:string|undefined
-  private readonly ACCESS_TOKEN_EXPIRES_IN:number = config.jwt.accessToken.expiresIn
-  private readonly REFRESH_TOKEN_EXPIRES_IN:number = config.jwt.refreshToken.expiresIn
+  private readonly REFRESH_TOKEN_EXPIRES_IN: number = config.jwt.refreshToken.expiresIn;
 
   constructor(
-    private readonly usersService:UsersService,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-    private readonly prismaService: PrismaService
-  ){
-    this.ACCESS_TOKEN_SECRET = this.configService.get("ACCESS_TOKEN_SECRET")
-    this.REFRESH_TOKEN_SECRET = this.configService.get("REFRESH_TOKEN_SECRET")
+    private readonly usersService: UsersService,
+    private readonly jwtManager: JwtManagerService,
+    private readonly prismaService:PrismaService
+  ) {}
+
+  async register() {
+    return await this.usersService.create();
   }
 
-  async register(){
-    return await this.usersService.create()
+  async validate(loginDto: LoginDto) {
+    const { search_hash, verification_hash, ...user } = 
+      await this.usersService.findBySecret(loginDto.secretPhrase);
+    return user;
   }
 
-  async validate(loginDto:LoginDto){
-    
-    const {search_hash,verification_hash,...user} = await this.usersService.findBySecret(loginDto.secretPhrase)
+  async login(loginDto: LoginDto) {
+    const { id: userId } = await this.usersService.findBySecret(loginDto.secretPhrase);
+    const familyId = crypto.randomUUID();
 
-    return user
+    const accessToken = await this.jwtManager.generateAccessToken(userId);
+    const refreshToken = await this.jwtManager.generateRefreshToken(userId, familyId);
 
-  }
+    const tokenHash = this.jwtManager.hashToken(refreshToken);
 
-  async login(loginDto:LoginDto){
+    const expirationDate = new Date();
+    expirationDate.setSeconds(
+      expirationDate.getSeconds() +this.REFRESH_TOKEN_EXPIRES_IN
+    );
 
-    if(!this.ACCESS_TOKEN_SECRET) throw new InternalServerErrorException()
-
-    const {id:userId} = await this.usersService.findBySecret(loginDto.secretPhrase)
-    const familyId = crypto.randomUUID()
-
-    const accessToken = await this.genAccessToken({sub:userId}) 
-    const refreshToken = await this.genRefreshToken({sub:userId,familyId})
-
-    this.saveRefreshToken({
-      familyId,
-      userId,
-      token:refreshToken
-    })
+    await this.prismaService.refresh_tokens.create({
+      data: {
+        token: tokenHash,
+        user_id: userId,
+        family_id: familyId,
+        expires_at: expirationDate,
+      }
+    });
 
     return {
       accessToken,
       refreshToken
+    };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    if (!refreshToken) return;
+
+    const validation = await this.jwtManager.validateRefreshToken(refreshToken);
+
+    if (validation.isValid && validation.tokenRecord) {
+
+      await this.jwtManager.invalidateFamily(validation.tokenRecord.family_id);
+    } 
+  }
+
+  async refreshTokens(refreshToken: string) {
+    const validation = await this.jwtManager.validateRefreshToken(refreshToken);
+
+    if (!validation.isValid || validation.isExpired || validation.isRevoked || validation.isUsed) {
+      throw new UnauthorizedException('Invalid refresh token');
     }
+
+    await this.jwtManager.markTokenAsUsed(refreshToken);
+
+    const { newAccessToken, newRefreshToken } = await this.jwtManager.rotateTokens(
+      refreshToken,
+      validation.payload!.sub,
+      validation.payload!.familyId
+    );
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
+    };
   }
-
-  private async genAccessToken({
-    sub
-  }:
-  AccessTokenPayload
-  ):Promise<string>{
-    return await this.jwtService.signAsync<AccessTokenPayload>({
-      sub
-    },
-    {
-      expiresIn:this.ACCESS_TOKEN_EXPIRES_IN,
-      secret:this.ACCESS_TOKEN_SECRET
-    })
-  }
-
-  private async genRefreshToken({
-    familyId,
-    sub
-  }:
-    Omit<RefreshTokenPayload,"version">
-  ):Promise<string>{
-    return await this.jwtService.signAsync<RefreshTokenPayload>({
-      sub,
-      familyId,
-      version:1
-    },
-    {
-      expiresIn:this.REFRESH_TOKEN_EXPIRES_IN,
-      secret:this.REFRESH_TOKEN_SECRET
-    })
-  }
-
-  private async saveRefreshToken({
-    token,
-    userId,
-    familyId
-  }:{
-    token:string,
-    userId:string,
-    familyId:string
-  }){
-
-    const tokenHash = crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex")
-
-    const expirationDate = new Date(Date.now() + (this.REFRESH_TOKEN_EXPIRES_IN * 1000))
-
-    const refreshTokenEntity = await this.prismaService.refresh_tokens.create({
-      data:{
-        token:tokenHash,
-        user_id:userId,
-        family_id:familyId,
-        expires_at:expirationDate
-      }
-    }) 
-
-    if(!refreshTokenEntity)  throw new InternalServerErrorException()
-  }
-
-//TODO: Implement token managing methods that will be used by auth.guard
 }
