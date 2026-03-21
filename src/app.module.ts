@@ -7,6 +7,8 @@ import { UsersModule } from './users/users.module';
 import { registerEnvConfig } from './common/config/env';
 import { RandomModule } from './random/random.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
 
 @Module({
@@ -24,9 +26,18 @@ import { join } from 'path';
     PrismaModule,
     AuthModule,
     UsersModule,
-    RandomModule
+    RandomModule,
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 10,
+    }])
   ],
   controllers: [AppController],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard, // Aplica el límite a toda la aplicación
+    },
+  ],
 })
 export class AppModule {}

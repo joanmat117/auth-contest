@@ -15,6 +15,7 @@ import { ParseSecretPhrasePipe } from 'src/common/pipes/parse-secret-phrase.pipe
 import { type Response, type Request } from 'express';
 import { JwtManagerService } from './jwt-manager.service';
 import { AuthGuard } from './guards/auth.guard';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -23,6 +24,7 @@ export class AuthController {
     private readonly jwtManager: JwtManagerService
   ) {}
 
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
   async register() {
@@ -36,6 +38,7 @@ export class AuthController {
     };
   }
 
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post("login")
   @HttpCode(HttpStatus.OK)
   async login(
