@@ -18,7 +18,7 @@ Un sistema de autenticación "Zero Data" que elimina usuarios y contraseñas. Lo
 - **🚀 Frontend Integrado**: SPA (Single Page Application) construida con Bootstrap 5 servida directamente por el backend.
 - **🚦 Rate Limiting**: Protección integrada contra ataques de fuerza bruta en el login y registro.
 
----
+
 
 ## 🏗️ Architecture & Flow
 
@@ -29,48 +29,58 @@ Un sistema de autenticación "Zero Data" que elimina usuarios y contraseñas. Lo
 
 
 
----
-
 ## 🚀 Instalación y Uso
 
 1. **Instalar dependencias**:
    ```bash
    pnpm install
+   ```
 
- * Configurar Variables de Entorno (.env):
-```bash
+1. Configurar Variables de Entorno (.env):
+
+   ```bash
    DATABASE_URL="file:./dev.db"
-SEARCH_HASH_PEPPER="tu-pepper-secreto-32-chars"
-VERIFICATION_HASH_SECRET="tu-secret-argon-32-chars"
-ACCESS_TOKEN_SECRET="tu-access-secret"
-API_NINJA_API_KEY="tu-api-key"
-REFRESH_TOKEN_SECRET="tu-refresh-secret"
-```
-
- * Preparar Base de Datos:
+   SEARCH_HASH_PEPPER="tu-pepper-secreto-32-chars"
+   VERIFICATION_HASH_SECRET="tu-secret-argon-32-chars"
+   ACCESS_TOKEN_SECRET="tu-access-secret"
+   API_NINJA_API_KEY="tu-api-key"
+   REFRESH_TOKEN_SECRET="tu-refresh-secret"
+   ```
+2. Preparar Base de Datos:
+   ```bash
    pnpm prisma migrate dev
-
- * Lanzar Servidor:
+   ```
+3. Lanzar Servidor:
+   ```bash
    pnpm start:dev
-
+   ```
    Accede a: http://localhost:3000
-   
+
+
+
 ## 📚 API Reference
 
- * GET / -> Carga el index.html (interfaz de login/registro).
-Autenticación
- * POST /auth/register -> Genera un nuevo usuario y devuelve la frase de 3 palabras.
- * POST /auth/login -> Recibe { "secretPhrase": "palabra1 palabra2 palabra3" } y setea las cookies.
- * POST /auth/logout -> Invalida la sesión actual y limpia las cookies.
-Protegido
- * GET /random/quote -> Devuelve una frase aleatoria. Requiere cookie de Access Token válida.
+- `GET /` -> Carga el index.html (interfaz de login/registro).
 
-### 🚦 Rate Limiting (Límites de Tráfico)
+Autenticación
+
+- `POST /auth/register` -> Genera un nuevo usuario y devuelve la frase de 3 palabras.
+- `POST /auth/login` -> Recibe { "secretPhrase": "palabra1 palabra2 palabra3" } y setea las cookies.
+- `POST /auth/logout` -> Invalida la sesión actual y limpia las cookies.
+
+Protegido
+
+- `GET /random/quote` -> Devuelve una frase aleatoria. Requiere cookie de Access Token válida.
+
+
+## 🚦 Rate Limiting (Límites de Tráfico)
 
 Para proteger el servidor, se han implementado los siguientes límites mediante @nestjs/throttler:
 
- * General: Máximo 10 peticiones por minuto por IP.
- * Login: Configuración estricta para prevenir fuerza bruta.
+- General: Máximo 10 peticiones por minuto por IP.
+- Login: Configuración estricta para prevenir fuerza bruta.
+
+---
 
 ## 📦 Estructura del Proyecto
 
@@ -85,6 +95,8 @@ Para proteger el servidor, se han implementado los siguientes límites mediante 
 ├── prisma/                 # Esquema de SQLite
 └── nest-cli.json           # Configuración de assets (public folder)
 ```
+
+---
 
 <div align="center">
 <sub>Construido con ❤️ priorizando la privacidad del usuario.</sub>
